@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "printf.h": "c",
+        "mman.h": "c",
+        "stdio.h": "c",
+        "block_meta.h": "c",
+        "block_impl.h": "c",
+        "blck.h": "c"
+    }
+}

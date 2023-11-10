@@ -6,7 +6,7 @@ CFLAGS = -fPIC -Wall -Wextra -g
 LDFLAGS = -shared
 
 # TODO: Add additional sources
-SRCS = osmem.c $(UTILS_PATH)/printf.c
+SRCS = osmem.c $(UTILS_PATH)/printf.c blck.c
 OBJS = $(SRCS:.c=.o)
 TARGET = libosmem.so
 
