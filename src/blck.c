@@ -18,6 +18,7 @@ void add_block(block_meta_t *block)
 {
 	if (head.size == 0) {
 		set_list_head(block);
+        list_size++;
 		return;
 	}
 
@@ -26,14 +27,14 @@ void add_block(block_meta_t *block)
 	while (iterator->next != NULL)
 		iterator = iterator->next;
 
-	/* After the last allocated block, there will be the new block */
+    /* Make the connexions between block and iterator */
 	iterator->next = block;
-
-	/* Set the prev pointer */
 	block->prev = iterator;
+
+    list_size++;
 }
 
-int check_reusability_property(block_meta_t *block, size_t size)
+int check_resulting_reusability(block_meta_t *block, size_t size)
 {
     /* Invalid call of function */
     if (block == NULL || size == 0)
@@ -62,12 +63,12 @@ int check_reusability_property(block_meta_t *block, size_t size)
     total memory */
     size_t difference = total_space - new_space;
     
-    /* If the difference can hold at least the structure, 1 byte, and the
-    paddings, the zone is ok */
-    if (MIN_SPACE > difference)
-        return 0;
+    /* The difference should be a multiple of ALIGN_SIZE, so the remaining
+    memory can be aligned, and greater than the MIN_SPACE */
+    if ((MIN_SPACE <= difference) && (difference % ALIGN_SIZE == 0))
+        return 1;
 
-    return 1;
+    return 0;
 }
 
 block_meta_t *find_best_block(size_t size)
@@ -78,6 +79,12 @@ block_meta_t *find_best_block(size_t size)
     while (iterator) {
         /* If the chunk isn't marked as free, skip this step */
         if (iterator->status != STATUS_FREE) {
+            iterator = iterator->next;
+            continue;
+        }
+
+        /* Check if the current block cannot be split */
+        if (!check_resulting_reusability(iterator, size)) {
             iterator = iterator->next;
             continue;
         }
@@ -111,14 +118,66 @@ block_meta_t *find_best_block(size_t size)
     return return_block;
 }
 
-void use_free_memory(block_meta_t *block, size_t size)
+block_meta_t *split_block(block_meta_t *unused_block, size_t new_size)
 {
+    /* It will be useful in the future to know the size of the resulting free 
+    block */
+    size_t resultingblk_size = 0;
+
+    /* Start from the size of the bigger unused block */
+    resultingblk_size += METADATA_SIZE + METADATA_PAD + unused_block->size +
+                   get_padding(unused_block->size);
+
+    /* Subtract the memory used for the new allocation */
+    resultingblk_size -= (METADATA_SIZE + METADATA_PAD + new_size +
+                    get_padding(new_size));
+
+    /* Subtract the memory that will be used for the block_meta header of the 
+    chunk */
+    resultingblk_size -= (METADATA_SIZE + METADATA_PAD);
+
+    /* Calculate the total space ocuppied by the new allocation */
+    size_t newblk_total_size = METADATA_SIZE + METADATA_PAD + new_size +
+                               get_padding(new_size);
+
+    /* Move a pointer to the start of the resulting free block */   
+    block_meta_t *free_block = (block_meta_t *)((char *)unused_block +
+                                newblk_total_size);
+
+    /* Set the free block fields */
+    free_block->size = resultingblk_size;
+    free_block->status = STATUS_FREE;
     
+    /* Set the connections of the free block */
+    free_block->prev = unused_block;
+    free_block->next = unused_block->next;
+
+    /* Modify the remaining connections */
+    if (unused_block->next)
+        unused_block->next->prev = free_block;
+    
+    unused_block->next = free_block;
+
+    /* Set the fields of the allocated block */
+    unused_block->size = new_size;
+    unused_block->status = STATUS_ALLOC;
+
+    return free_block;
+}
+
+int is_in_list(block_meta_t *block)
+{
+    block_meta_t *iterator = &head;
+    while (iterator) {
+        if (iterator == block)
+            return 1;
+    }
+
+    return 0;
 }
 
 // ---------- ALLOCATION RELATED FUNCTIONS ----------
 
-/* Change this to enum */
 block_meta_t *alloc_new_block(size_t payload_size, alloc_type_t sys_used)
 {	
 	size_t payload_pad = get_padding(payload_size);
@@ -222,6 +281,14 @@ void extract_block(block_meta_t *block)
     block->next = NULL;
 }
 
+int free_mmaped_block(block_meta_t *block)
+{
+    size_t length = METADATA_SIZE + METADATA_PAD + block->size +
+                        get_padding(block->size);
+
+    return munmap(block, length);
+}
+
 // ---------- HELPERS ----------
 
 size_t get_padding(size_t chunk_size)
@@ -254,13 +321,15 @@ void print_block(block_meta_t *block)
 {
 	if (block == NULL) {
         printf_("NULL BLOCK\n");
+        printf_("\n");
         return;
     }
     
     void *p = get_address_by_block(block);
     printf_("BLOCK ADDRESS: %p\n", block);
     printf_("MEMORY ADDRESS: %p\n", p);
-	printf_("BLOCK SIZE: %ld\n", block->size);
+	printf_("BLOCK SIZE: %ld + %ld + %ld + %ld\n", METADATA_SIZE, METADATA_PAD, 
+            block->size, get_padding(block->size));
 	printf_("BLOCK STATUS: ");
 	if (block->status == STATUS_ALLOC) {
 		printf_("STATUS_ALLOC\n");
@@ -269,11 +338,17 @@ void print_block(block_meta_t *block)
 	} else {
 		printf_("STATUS_FREE\n");
 	}
+
+    printf_("PREV: %p\n", block->prev);
+    printf_("NEXT: %p\n", block->next);
+   
+    printf_("\n");
 }
 
 void print_list()
 {
-	block_meta_t *item = &head;
+	printf_("<<<< Memory List <%ld> >>>>\n", list_size);
+    block_meta_t *item = &head;
 	while (item != NULL) {
 		print_block(item);
 		item = item->next;

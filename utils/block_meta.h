@@ -48,19 +48,19 @@ typedef enum alloc_type alloc_type_t;
 
 /* Others */
 #define ALIGN_SIZE 8
-#define HEAP_PREALLOCATION_SIZE (128 * 1024)
 #define METADATA_PAD get_padding(METADATA_SIZE)
+
+/* The Heap Preallocation size should not consider the metadata, and it should
+allocate exactly 128kb for general use */
+#define HEAP_PREALLOCATION_SIZE (128 * 1024 - METADATA_SIZE - METADATA_PAD)
 
 /* The minimum space that should remain in the second block, 
 when splitting a block */
 #define MIN_SPACE (METADATA_SIZE + METADATA_PAD + 1 + get_padding(1))
+#define SIZE(size) (METADATA_SIZE + METADATA_PAD + size + get_padding(size))
 
 #define PREALLOCATION_DONE 1
 #define PREALLOCATION_NOT_DONE 0
-
-/* Macros used to call allocation function */
-#define MMAP_ALLOC 9
-#define BRK_ALLOC 12
 
 
 

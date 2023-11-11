@@ -12,6 +12,7 @@
 
 extern block_meta_t head;
 extern int preallocation_done;
+extern size_t list_size;
 
 /* Debugging functions */
 void print_block(block_meta_t *block);
@@ -20,25 +21,41 @@ void print_list();
 /* Memory List related functions */
 void set_list_head(block_meta_t *block);
 void add_block(block_meta_t *block);
+
+/**
+ * @brief Find the smallest unused block that can be split into 2 separate
+ * blocks, and the remaining memory of the second one can be reused for future
+ * allocations.
+ * 
+ * @param size The size of the new memory chunk we want to add to the list.
+ * @return block_meta_t* A pointer to the found block, or NULL, if none of
+ * them fits and respects the resulting block reusability rule.
+ */
 block_meta_t *find_best_block(size_t size);
 
 /**
- * @brief Check if the block send as parameter can be split
+ * @brief Check if the resulting block after split have memory that can be
+ * reused (at least 1 byte).
  * 
- * @param block 
- * @param size 
- * @return int 
+ * @param block The unused block that should be split.
+ * @param size The size of new block.
+ * @return int: 1, if the block can be split, and the remainig memory can be
+ * reused, 0, if the remaining memory cannot hold even 1 byte, and -1 in case
+ * of errors.
  */
-int check_reusability_property(block_meta_t *block, size_t size);
+int check_resulting_reusability(block_meta_t *block, size_t size);
 
 /**
- * @brief Split a free block into two adjacent blocks, use the memory of the
- * first one and mark free the second one, if there is space remaining.
+ * @brief Split the given unused block in 2 adjacent blocks, the first one
+ * used to simulate the new memory allocation, and the second one will be
+ * marked as free, and it's space can be used for further allocations. The
+ * caller should check if the block is valid and can be split. 
  * 
- * @param unused_block The block from the list marked as unused.
- * @param size The number of bytes we want to store in the block.
+ * @param unused_block The block marked as free that we want to split.
+ * @param new_size The new_size that we want to allocate in the block.
+ * @return block_meta_t* A pointer to the newly created free block.
  */
-void use_free_memory(block_meta_t *unused_block, size_t size);
+block_meta_t* split_block(block_meta_t *unused_block, size_t new_size);
 
 /* Allocation related functions */
 block_meta_t *alloc_new_block(size_t payload_size, alloc_type_t sys_used);
@@ -48,7 +65,17 @@ block_meta_t *prealloc_heap();
 void mark_freed(block_meta_t *block);
 void extract_block(block_meta_t *block);
 
+/**
+ * @brief Eliberates a block that contains memory allocated by mmap syscall.
+ * It's a wrraper of munmap syscall, specialized on metablocks.
+ * 
+ * @param block The block that should be freed.
+ * @return int: Return value of the munmap syscall.
+ */
+int free_mmaped_block(block_meta_t *block);
+
 /* Helper functions */
 size_t get_padding(size_t chunk_size);
 void *get_address_by_block(block_meta_t *block);
 block_meta_t *get_block_by_address(void *addr);
+int is_in_list(block_meta_t *block);
