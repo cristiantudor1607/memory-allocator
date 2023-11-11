@@ -3,11 +3,11 @@
 #include "osmem.h"
 
 /* Global head of the Memory List */
-block_meta_t head = {0, STATUS_FREE, NULL, NULL};
+block_meta_t *head;
 size_t list_size = 0;
 
 /* Global heap preallocation */
-int preallocation_done = PREALLOCATION_NOT_DONE;
+int prealloc_done = NOT_DONE;
 
 // ---------- MAIN FUNCTIONS ----------
 
@@ -16,34 +16,30 @@ void *os_malloc(size_t size)
 	/* If size is 0, return NULL and do nothing*/
 	if (size == 0)
 		return NULL;
+	
+	size_t raw_size = BLOCK_ALIGN + ALIGN(size);
 
-	/* Try to reserve a new block */
 	block_meta_t *new_block;
-	if (SIZE(size) <= MMAP_THRESHOLD) {
-		if (preallocation_done == PREALLOCATION_NOT_DONE) {
-			new_block = prealloc_heap();
-			DIE(!new_block, "Failed Heap Preallocation\n");
-			preallocation_done = PREALLOCATION_DONE;
-			add_block(new_block);
+	if (raw_size <= MMAP_THRESHOLD && prealloc_done == NOT_DONE) {
+		new_block = prealloc_heap();
+		DIE(!new_block, "os_malloc: failed heap preallocation\n");
 
-			if (SIZE(size) == MMAP_THRESHOLD) {
-				new_block->status = STATUS_ALLOC;
-				return get_address_by_block(new_block);
-			}
-
-			split_block(new_block, size);
-			return get_address_by_block(new_block);
-		} else {
-			new_block = alloc_new_block(size, BRK);
-			DIE(!new_block, "Failed sbrk allocation\n");
+		add_block(new_block);
+		if ((raw_size < MMAP_THRESHOLD) && (MMAP_THRESHOLD - raw_size >= MIN_SPACE)) {
+			block_meta_t *freeblk = split_block(new_block, size);
+			print_block(new_block);
+			print_block(freeblk);
 		}
-
-	} else {
-		new_block = alloc_new_block(size, MMAP);
-		DIE(!new_block, "Failed mmap allocation\n");
+			
+		print_list();
+		return get_address_by_block(new_block);
 	}
 
+	new_block = alloc_new_block(size);
+	DIE(!new_block, "os_malloc: failed allocation\n");
+
 	add_block(new_block);
+
 	return get_address_by_block(new_block);
 }
 
@@ -54,15 +50,14 @@ void os_free(void *ptr)
 		return;
 
 	block_meta_t *block = get_block_by_address(ptr);
-	if (block->status == STATUS_ALLOC) {
-		mark_freed(block);
-		return;
-	}
-
 	if (block->status == STATUS_MAPPED) {
-		extract_block(block);
-		free_mmaped_block(block);
+		int ret = free_mmaped_block(block);
+		DIE(ret, "os_free: munmap failure\n");
 		return;
+	} else if (block->status == STATUS_FREE) {
+		return;
+	} else {
+		mark_freed(block);
 	}
 }
 

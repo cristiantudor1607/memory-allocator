@@ -10,8 +10,8 @@
 #include "printf.h"
 #include "block_meta.h"
 
-extern block_meta_t head;
-extern int preallocation_done;
+extern block_meta_t *head;
+extern int prealloc_done;
 extern size_t list_size;
 
 /* Debugging functions */
@@ -52,13 +52,14 @@ int check_resulting_reusability(block_meta_t *block, size_t size);
  * caller should check if the block is valid and can be split. 
  * 
  * @param unused_block The block marked as free that we want to split.
- * @param new_size The new_size that we want to allocate in the block.
+ * @param payload_size The size of the new payload that we want to allocate
+ * in the block.
  * @return block_meta_t* A pointer to the newly created free block.
  */
-block_meta_t* split_block(block_meta_t *unused_block, size_t new_size);
+block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size);
 
 /* Allocation related functions */
-block_meta_t *alloc_new_block(size_t payload_size, alloc_type_t sys_used);
+block_meta_t *alloc_new_block(size_t payload_size);
 block_meta_t *prealloc_heap();
 
 /* Deallocation related functions */
@@ -75,7 +76,6 @@ void extract_block(block_meta_t *block);
 int free_mmaped_block(block_meta_t *block);
 
 /* Helper functions */
-size_t get_padding(size_t chunk_size);
 void *get_address_by_block(block_meta_t *block);
 block_meta_t *get_block_by_address(void *addr);
 int is_in_list(block_meta_t *block);

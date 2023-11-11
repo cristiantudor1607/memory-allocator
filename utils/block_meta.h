@@ -16,7 +16,7 @@
 	} while (0)
 
 /* Structure to hold memory block metadata */
-struct __attribute((__packed__)) block_meta  {
+struct block_meta  {
 	size_t size;
 	int status;
 	struct block_meta *prev;
@@ -46,21 +46,16 @@ typedef enum alloc_type alloc_type_t;
 #define NUM_SZ_LG		4
 #define MULT_KB			1024
 
-/* Others */
-#define ALIGN_SIZE 8
-#define METADATA_PAD get_padding(METADATA_SIZE)
+/* New defines */
+#define ALIGNMENT 8
+#define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
+#define BLOCK_ALIGN ALIGN(sizeof(block_meta_t))
 
-/* The Heap Preallocation size should not consider the metadata, and it should
-allocate exactly 128kb for general use */
-#define HEAP_PREALLOCATION_SIZE (128 * 1024 - METADATA_SIZE - METADATA_PAD)
+#define MIN_SPACE (BLOCK_ALIGN + ALIGN(1))
 
-/* The minimum space that should remain in the second block, 
-when splitting a block */
-#define MIN_SPACE (METADATA_SIZE + METADATA_PAD + 1 + get_padding(1))
-#define SIZE(size) (METADATA_SIZE + METADATA_PAD + size + get_padding(size))
-
-#define PREALLOCATION_DONE 1
-#define PREALLOCATION_NOT_DONE 0
+#define HEAP_PREALLOCATION_SIZE (128 * 1024)
+#define DONE 1
+#define NOT_DONE 0
 
 
 
