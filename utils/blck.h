@@ -58,9 +58,14 @@ int check_resulting_reusability(block_meta_t *block, size_t size);
  */
 block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size);
 
+block_meta_t *get_last_block();
+
 /* Allocation related functions */
+void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type);
+void *extend_heap(size_t size);
 block_meta_t *alloc_new_block(size_t payload_size);
 block_meta_t *prealloc_heap();
+block_meta_t *reuse_block(size_t size);
 
 /* Deallocation related functions */
 void mark_freed(block_meta_t *block);
@@ -78,4 +83,13 @@ int free_mmaped_block(block_meta_t *block);
 /* Helper functions */
 void *get_address_by_block(block_meta_t *block);
 block_meta_t *get_block_by_address(void *addr);
-int is_in_list(block_meta_t *block);
+
+/**
+ * @brief Get the raw memory that will remain when you want to fit new_size
+ * bytes on block memory space.
+ * 
+ * @param block The block marked as free.
+ * @param new_size The new size of the chunk we want to allocate.
+ * @return size_t: Raw memory in bytes.
+ */
+size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size);

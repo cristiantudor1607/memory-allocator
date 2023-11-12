@@ -77,7 +77,6 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
     /* Calculate the raw size of the new chunk */
     size_t raw_chunk = BLOCK_ALIGN + ALIGN(payload_size);
 
-    // TODO: Check if there is enough space in the second block
     size_t free_memory = raw_block - raw_chunk;
 
     /* Get a pointer to the resulting free block */
@@ -89,7 +88,7 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
     unused_block->status = STATUS_ALLOC;
 
     /* Set the fields of the remaining free zone */
-    free_block->size = free_memory;
+    free_block->size = ALIGN(free_memory - BLOCK_ALIGN);
     free_block->status = STATUS_FREE;
 
     /* Make the connections for the resulting free block */
@@ -105,6 +104,60 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
     list_size++;
 
     return free_block;
+}
+
+block_meta_t *find_best_block(size_t size)
+{
+    block_meta_t *return_block = NULL;
+    block_meta_t *iterator = head;
+
+    while (iterator) {
+        /* If the chunk isn't marked as free, skip */
+        if (iterator->status != STATUS_FREE) {
+            iterator = iterator->next;
+            continue;
+        }
+
+        /* If the current block cannot fit the new memory, skip */
+        if (ALIGN(iterator->size) < ALIGN(size)) {
+            iterator = iterator->next;
+            continue;
+        }
+
+        /* If it finds a perfect block */
+        if (ALIGN(iterator->size) == ALIGN(size))
+            return iterator;
+        
+        /* If it finds the first fitting zone */
+        if (!return_block) {
+            return_block = iterator;
+            iterator = iterator->next;
+            continue;
+        }
+
+        /* If it finds a zone more suitable */
+        if (ALIGN(return_block->size) > ALIGN(iterator->size)) {
+            return_block = iterator;
+            iterator = iterator->next;
+            continue;
+        }
+
+        iterator = iterator->next;   
+    }
+
+    return return_block;
+}
+
+block_meta_t *get_last_block()
+{
+    block_meta_t *iterator = head;
+    if (iterator == NULL)
+        return NULL;
+
+    while (iterator->next != NULL)
+        iterator = iterator->next;
+
+    return iterator;
 }
 
 /* ----- ALLOCATION RELATED FUNCTIONS ----- */
@@ -173,6 +226,59 @@ block_meta_t *prealloc_heap()
     return preallocated_zone;
 }
 
+void *extend_heap(size_t size)
+{
+    void *p = sbrk(size);
+    if (p == MAP_FAILED)
+        return NULL;
+
+    return p;
+}
+
+block_meta_t *reuse_block(size_t size)
+{
+    if (!head)
+        return NULL;
+    
+    size_t raw_size = BLOCK_ALIGN + ALIGN(size);
+    if (raw_size > MMAP_THRESHOLD)
+        return NULL;
+
+    /* Get the tail of the list, to expand it if possible */
+    block_meta_t *tail = get_last_block();
+
+    /* Find a fitting block*/
+    block_meta_t *block = find_best_block(size);
+
+    /* If nothing was found, and the tail isn't free, there's nothing
+    to do */
+    if (!block && tail->status != STATUS_FREE) 
+        return NULL;
+
+    /* If the tail is free, and it didin't find any block */
+    if (!block) {
+        block_meta_t *ptr = tail;
+        void *new_zone = extend_heap(ALIGN(size - tail->size));
+        DIE(!new_zone, "failed to extend the heap\n");
+        ptr->size = size;
+        ptr->status = STATUS_ALLOC;
+        return ptr;
+    }
+
+    if (block->size == size) {
+        block->status = STATUS_ALLOC;
+        return block;
+    }
+
+    if (get_raw_reusable_memory(block, size) < MIN_SPACE) {
+        block->status = STATUS_ALLOC;
+        return block;
+    }
+
+    split_block(block, size);
+    return block;
+}
+
 /* ----- DEALLOCATION RELATED FUNCTIONS ----- */
 
 void mark_freed(block_meta_t *block)
@@ -195,9 +301,21 @@ void *get_address_by_block(block_meta_t *block)
 {
     return (void *)((char *)block + BLOCK_ALIGN);
 }
+
 block_meta_t *get_block_by_address(void *addr)
 {
     return (block_meta_t *)((char *)addr - BLOCK_ALIGN);
+}
+
+size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size)
+{
+    /* Calculate the raw size for the new memory*/
+    size_t raw_size = BLOCK_ALIGN + ALIGN(new_size);
+
+    /* Calculate the raw size of the block */
+    size_t capacity = BLOCK_ALIGN + ALIGN(block->size);
+
+    return capacity - raw_size;
 }
 
 /* ----- DEBUGGING FUNCTIONS ----- */
@@ -232,6 +350,11 @@ void print_list()
 {
 	printf_("<<<< Memory List <%ld> >>>>\n", list_size);
     block_meta_t *item = head;
+    if (item == NULL) {
+        printf_("Memory List is Empty\n");
+        return;
+    }
+
 	while (item != NULL) {
 		print_block(item);
 		item = item->next;
