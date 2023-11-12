@@ -58,6 +58,8 @@ int check_resulting_reusability(block_meta_t *block, size_t size);
  */
 block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size);
 
+block_meta_t *get_last_heap();
+block_meta_t *get_last_mmap();
 block_meta_t *get_last_block();
 
 /* Allocation related functions */

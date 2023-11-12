@@ -9,22 +9,108 @@ void set_list_head(block_meta_t *block)
 	head = block;
 }
 
+
+block_meta_t *get_last_heap()
+{
+    if (!head)
+        return NULL;
+
+    block_meta_t *iter = head;
+    while (iter->next)
+        iter = iter->next;
+
+    if (iter->status == STATUS_MAPPED)
+        return NULL;
+
+    return iter;
+}
+
+block_meta_t *get_last_mmap()
+{
+    /* If Memory List is empty */
+    if (!head)
+        return NULL;
+
+    /* If Memory List doesn't contain any maped block */
+    if (head->status == STATUS_ALLOC)
+        return NULL;
+
+    /* Find the last maped block */
+    block_meta_t *iter = head;
+    while (iter->next != NULL) {
+        if (iter->next->status == STATUS_ALLOC)
+            break;
+
+        iter = iter->next;
+    }
+
+    return iter;    
+}
+
+block_meta_t *get_last_block()
+{
+    if (!head)
+        return NULL;
+
+    block_meta_t *iter = head;
+    while (iter->next)
+        iter = iter->next;
+
+    return iter;
+}
+
+void insert_mmaped_block(block_meta_t *block)
+{
+    /* When the list is empty, set it's head */
+    if (!head) {
+        set_list_head(block);
+        return;
+    }
+
+    block_meta_t *last_mapped = get_last_mmap();
+    
+    /* If last_mapped is NULL, then there is no mapped block in the list */
+    if (!last_mapped) {
+        /* Make it the head */
+        block->prev = NULL;
+        block->next = head;
+        head->prev = block;
+        head = block;
+        return;
+    }
+
+    block_meta_t *first_allocd = last_mapped->next;
+
+    block->prev = last_mapped;
+    block->next = first_allocd;
+    last_mapped->next = block;
+    if (first_allocd)
+        first_allocd->prev = block;
+    
+}
+
+void insert_heap_block(block_meta_t *block)
+{
+    /* When the list is empty, set it's head */
+    if (!head) {
+        set_list_head(block);
+        return;
+    }
+
+    /* A new heap block will always go to the end of the list */
+    block_meta_t *last_block = get_last_block();
+
+    block->next = NULL;
+    block->prev = last_block;
+    last_block->next = block;
+}
+
 void add_block(block_meta_t *block)
 {
-	if (!head) {
-		set_list_head(block);
-        list_size++;
-		return;
-	}
-
-	/* Go to the end of the list */
-	block_meta_t *iterator = head;
-	while (iterator->next != NULL)
-		iterator = iterator->next;
-
-    /* Make the connexions between block and iterator */
-	iterator->next = block;
-	block->prev = iterator;
+	if (block->status == STATUS_ALLOC)
+        insert_heap_block(block);
+    else
+        insert_mmaped_block(block);
 
     list_size++;
 }
@@ -148,18 +234,6 @@ block_meta_t *find_best_block(size_t size)
     return return_block;
 }
 
-block_meta_t *get_last_block()
-{
-    block_meta_t *iterator = head;
-    if (iterator == NULL)
-        return NULL;
-
-    while (iterator->next != NULL)
-        iterator = iterator->next;
-
-    return iterator;
-}
-
 /* ----- ALLOCATION RELATED FUNCTIONS ----- */
 
 void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type)
@@ -245,7 +319,9 @@ block_meta_t *reuse_block(size_t size)
         return NULL;
 
     /* Get the tail of the list, to expand it if possible */
-    block_meta_t *tail = get_last_block();
+    block_meta_t *tail = get_last_heap();
+    if (!tail)
+        return NULL;
 
     /* Find a fitting block*/
     block_meta_t *block = find_best_block(size);
@@ -258,7 +334,7 @@ block_meta_t *reuse_block(size_t size)
     /* If the tail is free, and it didin't find any block */
     if (!block) {
         block_meta_t *ptr = tail;
-        void *new_zone = extend_heap(ALIGN(size - tail->size));
+        void *new_zone = extend_heap(ALIGN(size) - ALIGN(tail->size));
         DIE(!new_zone, "failed to extend the heap\n");
         ptr->size = size;
         ptr->status = STATUS_ALLOC;
