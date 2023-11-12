@@ -57,6 +57,7 @@ typedef enum alloc_type alloc_type_t;
 #define DONE 1
 #define NOT_DONE 0
 
+#define PAGE_SIZE 4096
 
 
 

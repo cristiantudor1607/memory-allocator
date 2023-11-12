@@ -9,7 +9,6 @@ void set_list_head(block_meta_t *block)
 	head = block;
 }
 
-
 block_meta_t *get_last_heap()
 {
     if (!head)
@@ -23,6 +22,22 @@ block_meta_t *get_last_heap()
         return NULL;
 
     return iter;
+}
+
+block_meta_t *get_heap_start()
+{
+    if (!head)
+        return NULL;
+
+    block_meta_t *iter = head;
+    while (iter) {
+        if (iter->status == STATUS_ALLOC)
+            return iter;
+
+        iter = iter->next;
+    }
+
+    return NULL;
 }
 
 block_meta_t *get_last_mmap()
@@ -123,20 +138,15 @@ void extract_block(block_meta_t *block)
     /* If prev is NULL and next is NULL, then the block is the only block in 
     Memory List: In this case,  we just reset the head */
     if (!prev && !next) {
-        head->size = 0;
-        head->status = STATUS_FREE;
-        head->prev = NULL;
-        head->next = NULL;
+        head = NULL;
         return;
     }
 
     /* If just prev is NULL, then the block is the head of the Memory List: In
     this case, we make the next block the head */
     if (!prev) {
-        head->size = next->size;
-        head->status = next->status;
+        head = head->next;
         head->prev = NULL;
-        head->next = next->next;
         return;
     }
 
@@ -251,14 +261,14 @@ void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type)
     return p;
 }
 
-block_meta_t *alloc_new_block(size_t payload_size)
+block_meta_t *alloc_new_block(size_t payload_size, size_t limit)
 {	
     /* Calculated the raw memory size that will be used for the payload */
     size_t raw_size = BLOCK_ALIGN + ALIGN(payload_size);
 
     /* Get the memory using either sbrk or mmap, depending on required size */
     void *p;
-    if (raw_size <= MMAP_THRESHOLD) {
+    if (raw_size <= limit) {
         p = alloc_raw_memory(raw_size, BRK);
     } else {
         p = alloc_raw_memory(raw_size, MMAP);
@@ -272,7 +282,7 @@ block_meta_t *alloc_new_block(size_t payload_size)
     block_meta_t *block = (block_meta_t *)p;
     block->size = payload_size;
     
-    if (raw_size <= MMAP_THRESHOLD)
+    if (raw_size <= limit)
         block->status = STATUS_ALLOC;
     else
         block->status = STATUS_MAPPED;
@@ -365,6 +375,63 @@ void mark_freed(block_meta_t *block)
     block->status = STATUS_FREE;
 }
 
+void merge_with_next(block_meta_t *block)
+{
+    block_meta_t *next = block->next;
+
+    /* If next does not exist, there is nothing to do */
+    if (!next)
+        return;
+
+    /* If it isn't a free block */
+    if (next->status != STATUS_FREE)
+        return;
+
+    /* Compute the size of the resulting block after merging */
+    size_t new_size = ALIGN(block->size) + ALIGN(next->size) + BLOCK_ALIGN;
+    
+    block_meta_t *new_next = next->next;
+
+    /* If new_next exists, then it's prev pointer should point to the header of
+    the block, because it will become the header of the big block */
+    if (new_next)
+        new_next->prev = block;
+
+    block->next = new_next;
+    block->size = new_size;
+
+}
+
+void merge_with_prev(block_meta_t *block)
+{
+    block_meta_t *prev = block->prev;
+
+    /* If it doesn't exist, there is nothing to do */
+    if (!prev)
+        return;
+
+    /* If it isn't a free block */
+    if (prev->status != STATUS_FREE)
+        return;
+
+    /* Compute the size of the resulting block after merging */
+    size_t new_size = ALIGN(block->size) + ALIGN(prev->size) + BLOCK_ALIGN;
+
+    block_meta_t *new_next = block->next;
+
+    if (new_next)
+        new_next->prev = prev;
+
+    prev->next = new_next;
+    prev->size = new_size;
+}
+
+void merge_free_blocks(block_meta_t *block)
+{
+    merge_with_next(block);
+    merge_with_prev(block);
+}
+
 int free_mmaped_block(block_meta_t *block)
 {
     size_t length = BLOCK_ALIGN + ALIGN(block->size);
@@ -392,6 +459,14 @@ size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size)
     size_t capacity = BLOCK_ALIGN + ALIGN(block->size);
 
     return capacity - raw_size;
+}
+
+void *memset_block(block_meta_t *block, int c)
+{
+    void *p = get_address_by_block(block);
+    size_t len = ALIGN(block->size);
+
+    return memset(p, c, len);
 }
 
 /* ----- DEBUGGING FUNCTIONS ----- */

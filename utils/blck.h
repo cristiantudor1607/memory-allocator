@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <string.h>
 #include "printf.h"
 #include "block_meta.h"
 
@@ -59,19 +60,25 @@ int check_resulting_reusability(block_meta_t *block, size_t size);
 block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size);
 
 block_meta_t *get_last_heap();
+block_meta_t *get_heap_start();
 block_meta_t *get_last_mmap();
 block_meta_t *get_last_block();
 
 /* Allocation related functions */
 void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type);
 void *extend_heap(size_t size);
-block_meta_t *alloc_new_block(size_t payload_size);
+block_meta_t *alloc_new_block(size_t payload_size, size_t limit);
 block_meta_t *prealloc_heap();
 block_meta_t *reuse_block(size_t size);
 
 /* Deallocation related functions */
 void mark_freed(block_meta_t *block);
 void extract_block(block_meta_t *block);
+
+void merge_with_prev(block_meta_t *block);
+void merge_with_next(block_meta_t *block);
+void merge_free_blocks(block_meta_t *block);
+
 
 /**
  * @brief Eliberates a block that contains memory allocated by mmap syscall.
@@ -95,3 +102,5 @@ block_meta_t *get_block_by_address(void *addr);
  * @return size_t: Raw memory in bytes.
  */
 size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size);
+
+void *memset_block(block_meta_t *block, int c);
