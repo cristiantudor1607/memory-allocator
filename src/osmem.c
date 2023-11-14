@@ -84,7 +84,7 @@ void *os_calloc(size_t nmemb, size_t size)
 	if (raw_size <= PAGE_SIZE && prealloc_done == NOT_DONE) {
 		new_block = prealloc_heap();
 		memset_block(new_block, 0);
-		DIE(!new_block, "os_malloc: failed heap preallocation\n");
+		DIE(!new_block, "os_calloc: failed heap preallocation\n");
 
 		add_block(new_block);
 		if ((raw_size < PAGE_SIZE) && (PAGE_SIZE - raw_size >= MIN_SPACE)) {
@@ -104,7 +104,7 @@ void *os_calloc(size_t nmemb, size_t size)
 		return memset_block(free_block, 0);
 
 	new_block = alloc_new_block(nmemb * size, PAGE_SIZE);
-	DIE(!new_block, "os_malloc: failed allocation\n");
+	DIE(!new_block, "os_calloc: failed allocation\n");
 
 	memset_block(new_block, 0);
 	add_block(new_block);
@@ -114,6 +114,88 @@ void *os_calloc(size_t nmemb, size_t size)
 
 void *os_realloc(void *ptr, size_t size)
 {
-	/* TODO: Implement os_realloc */
-	return NULL;
+	if (!ptr && !size)
+		return NULL;
+
+	if (!ptr)
+		return os_malloc(size);
+
+	if (!size) {
+		os_free(ptr);
+		return NULL;
+	}
+
+	block_meta_t *block = get_block_by_address(ptr);
+	if (block->status == STATUS_FREE)
+		return NULL;
+	
+	/* If the block was mapped is very simple, make a new block, copy the contents and
+	delete the previous one */
+	if (block->status == STATUS_MAPPED) {
+		block_meta_t *new_block = realloc_mapped_block(block, size);
+		DIE(!new_block, "os_realloc: failed allocation\n");
+		return get_address_by_block(new_block);
+	}
+
+	/* If the size is less or equal, we'll truncate the block, without creating
+	any additional block. We can bring back the old size by computing the
+	difference between the next block start address (header start address) and
+	the memory start address (pointer to the end of the current block header) */
+	if (size <= block->size) {
+		printf_("Truncate case\n");
+		block->size = size;
+		return ptr;
+	}
+
+	/* Check if the last block was truncated. If true, try using that memory. 
+	If there isn't enough memory, expand the heap */
+	if (!block->next) {
+		/* Get the end address */
+		void *end_addr = sbrk(0);
+
+		size_t diff = (size_t)(end_addr - ptr);
+		if (diff >= size) {
+			block->size = size;
+			return ptr;
+		}
+		
+		/* Expand the block */
+		block->size = diff;
+		expand_heap(ALIGN(size - diff));
+		return ptr;
+	}
+
+	/* Compute the difference between the address and the next block header */
+	size_t diff = (size_t)((void *)block->next - ptr);
+	if (diff >= size) {
+		block->size = size;
+		return ptr;
+	} else {
+		block->size = diff;
+
+		/* Try merging */
+		block_meta_t *space = make_space(block, size);
+		if (space) {
+			return ptr;
+		}
+
+		/* Search for a free block */
+		block_meta_t *free_block = reuse_block(size);
+		if (free_block) {
+			return get_address_by_block(free_block);
+		}
+
+		block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
+		DIE(!new_block, "os_realloc: failed allocation\n");
+		
+		print_list();
+		add_block(new_block);
+		copy_contents(block, new_block);
+		mark_freed(block);
+		merge_free_blocks(block);
+		
+		print_list();
+		return get_address_by_block(new_block);
+	}
+	
 }

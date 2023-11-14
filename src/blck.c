@@ -310,7 +310,7 @@ block_meta_t *prealloc_heap()
     return preallocated_zone;
 }
 
-void *extend_heap(size_t size)
+void *expand_heap(size_t size)
 {
     void *p = sbrk(size);
     if (p == MAP_FAILED)
@@ -467,6 +467,100 @@ void *memset_block(block_meta_t *block, int c)
     size_t len = ALIGN(block->size);
 
     return memset(p, c, len);
+}
+
+
+/* ----- REALLOCATION RELATED FUNCTIONS ----- */
+
+block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
+{
+    /* As a measure of safety, return NULL if the function isn't called with
+    a block that wasn't mapped */
+    if (block->status != STATUS_MAPPED)
+        return NULL;
+
+    size_t raw_size = BLOCK_ALIGN + ALIGN(size);
+    block_meta_t *new_block;
+    if (raw_size <= MMAP_THRESHOLD && prealloc_done == NOT_DONE) {
+        new_block = prealloc_heap();
+        if (!new_block)
+            return NULL;
+
+        add_block(new_block);
+        if (raw_size < MMAP_THRESHOLD && MMAP_THRESHOLD - raw_size >= MIN_SPACE) {
+            split_block(new_block, size);
+        } else {
+            new_block->status = STATUS_ALLOC;
+        }
+
+        prealloc_done = DONE;
+    } else {
+        /* Get a new block with the size adjusted */
+        new_block = alloc_new_block(size, MMAP_THRESHOLD);
+        if (!new_block)
+            return NULL;
+
+        add_block(new_block);
+
+    }
+    
+    extract_block(block);
+    free_mmaped_block(block);
+    return new_block;
+}
+
+void *truncate_block(block_meta_t *block, size_t new_size)
+{
+    /* If it is the last block, we have to get the program break */
+    void *end_addr;
+    void *start_adrr = get_address_by_block(block);
+    
+    if (!block->next)
+        end_addr = sbrk(0);
+    else
+        end_addr = (void *)block->next;
+
+    /* If the block can hold new_size bytes */
+    size_t memory = end_addr - start_adrr;
+    if (memory < new_size) {
+        block->size = new_size;
+        return start_adrr;
+    }
+
+    /* If it can, expand the block, if it is the last block */
+    if (!block->next) {
+        expand_heap(new_size);
+        return start_adrr;
+    }
+
+    return NULL;
+}
+
+block_meta_t *make_space(block_meta_t *block, size_t size)
+{
+    while (block->next != NULL) {
+        if (block->next->status != STATUS_FREE)
+            break;
+        
+        /* Merge with next block */
+        merge_with_next(block);
+
+        /* If it matches, stop here */
+        if (ALIGN(block->size) >= ALIGN(size))
+            return block;
+    }
+
+    /* If it reaches this point, then there is no space, not even after
+    merging all blocks */
+    return NULL;
+}
+
+void copy_contents(block_meta_t *src_block, block_meta_t *dest_block)
+{
+    void *src = get_address_by_block(src_block);
+    void *dest = get_address_by_block(dest_block);
+    size_t n = src_block->size;
+    memcpy(dest, src, n);
 }
 
 /* ----- DEBUGGING FUNCTIONS ----- */

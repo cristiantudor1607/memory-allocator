@@ -89,6 +89,10 @@ void merge_free_blocks(block_meta_t *block);
  */
 int free_mmaped_block(block_meta_t *block);
 
+/* Reallocation related functions */
+block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size);
+block_meta_t *make_space(block_meta_t *block, size_t size);
+
 /* Helper functions */
 void *get_address_by_block(block_meta_t *block);
 block_meta_t *get_block_by_address(void *addr);
@@ -104,3 +108,5 @@ block_meta_t *get_block_by_address(void *addr);
 size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size);
 
 void *memset_block(block_meta_t *block, int c);
+
+void copy_contents(block_meta_t *src_block, block_meta_t *dest_block);
