@@ -493,6 +493,7 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
         return NULL;
 
     size_t raw_size = BLOCK_ALIGN + ALIGN(size);
+
     block_meta_t *new_block;
     if (raw_size <= MMAP_THRESHOLD && prealloc_done == NOT_DONE) {
         new_block = prealloc_heap();
@@ -507,19 +508,62 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
         }
 
         prealloc_done = DONE;
-    } else {
-        /* Get a new block with the size adjusted */
-        new_block = alloc_new_block(size, MMAP_THRESHOLD);
-        if (!new_block)
-            return NULL;
-
-        add_block(new_block);
-
+        return new_block;
     }
     
-    extract_block(block);
-    free_mmaped_block(block);
+    /* Search for unused blocks */
+    if (raw_size <= MMAP_THRESHOLD) {
+        block_meta_t *unused = reuse_block(size);
+        if (unused)
+            return unused;
+    }
+
+    /* Get a new block with the size adjusted */
+    new_block = alloc_new_block(size, MMAP_THRESHOLD);
+    if (!new_block)
+        return NULL;
+
+    add_block(new_block);
+
     return new_block;
+}
+
+block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size)
+{
+    /* First, some measures of safety */
+    if (ALIGN(size) + BLOCK_ALIGN <= MMAP_THRESHOLD)
+        return NULL;
+
+    if (block->status != STATUS_ALLOC)
+        return NULL;
+
+    /* Get a new block and copy the contents */
+    block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
+    if (!new_block)
+        return NULL;
+
+    copy_contents(block, new_block);
+    
+    /* Add the new block to the Memory List and mark the old one as free */
+    add_block(new_block);
+
+    return new_block;
+}
+
+block_meta_t *unite_blocks(block_meta_t *block, size_t size)
+{
+    while (block->next != NULL) {
+        if (block->next->status != STATUS_FREE)
+            break;
+        
+        block->size = get_raw_size(block);
+        merge_with_next(block);
+
+        if (ALIGN(block->size) >= ALIGN(size))
+            return block;
+    }
+
+    return NULL;
 }
 
 void *truncate_block(block_meta_t *block, size_t new_size)

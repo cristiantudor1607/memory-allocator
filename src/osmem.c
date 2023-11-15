@@ -98,6 +98,16 @@ void *os_calloc(size_t nmemb, size_t size)
 
 		return get_address_by_block(new_block);
 	}
+
+	if (raw_size > PAGE_SIZE) {
+		new_block = alloc_new_block(nmemb * size, PAGE_SIZE);
+		DIE(!new_block, "os_calloc: failed allocation\n");
+
+		memset_block(new_block, 0);
+		add_block(new_block);
+
+		return get_address_by_block(new_block);
+	}
 	
 	block_meta_t *free_block = reuse_block(nmemb * size);
 	if (free_block)
@@ -114,8 +124,6 @@ void *os_calloc(size_t nmemb, size_t size)
 
 void *os_realloc(void *ptr, size_t size)
 {
-	printf_("+++++++++++++++++++++++++++++++++\n");
-	print_list();
 	if (!ptr && !size)
 		return NULL;
 
@@ -136,66 +144,69 @@ void *os_realloc(void *ptr, size_t size)
 	if (block->status == STATUS_FREE)
 		return NULL;
 	
-	/* If the block was mapped is very simple, make a new block, copy the contents and
-	delete the previous one */
+	/* First, for mapped blocks there is a single case */
 	if (block->status == STATUS_MAPPED) {
 		block_meta_t *new_block = realloc_mapped_block(block, size);
 		DIE(!new_block, "os_realloc: failed allocation\n");
+		os_free(ptr);
 		return get_address_by_block(new_block);
 	}
 
-	/* If the size is smaller than block->size, there is a possibility that
-	we have to split the block */
+	/* If the heap block should be rellocated with mmap */
+	if (ALIGN(size) + BLOCK_ALIGN > MMAP_THRESHOLD) {
+		block_meta_t *new_block = move_to_mmap_space(block, size);
+		DIE(!new_block, "os_realloc: failed allocation\n");
+		os_free(ptr);
+		return get_address_by_block(new_block);
+	}
+
+
+	/* If the size is smaller than all the memory allocated in block's memory,
+	there are two possibilities: is is considerable smaller, it should be
+	splitted, else, it should be truncated */
 	size_t true_size = get_raw_size(block);
-	if (ALIGN(size) < true_size) {
+	if (ALIGN(size) <= true_size) {
+		/* Split case */
 		if (true_size - ALIGN(size) >= MIN_SPACE) {
 			block->size = true_size;
 			split_block(block, size);
 			return ptr;
 		}
+
+		/* Truncate case */
+		block->size = size;
+		return ptr;
 	}
 
-	/* Check if it is the last block in Memory List; because there is a 
-	possibility that it was previously truncated, we have to get it's real,
-	allocated size */
-	if (!block->next) {
-		if (ALIGN(size) <= true_size) {
-			block->size = size;
-			return ptr;
-		}
 
-		/* Expand */
+	/* Check if memory can be expanded by expanding the heap */
+	if (!block->next) {
 		expand_heap(ALIGN(size) - true_size);
 		block->size = size;
 		return ptr;
 	}
 
-	/* Check if it is possible to truncate / use the memory that was previously
-	truncated, or expand the heap if it is the last block */
-	void *ret_addr = truncate_block(block, size);
-	if (ret_addr)
-		return ret_addr;
 
-	/* Search for free blocks to move the data */
-	block_meta_t *unused = reuse_block(size);
-	if (unused) {
-		copy_contents(block, unused);
+	/* Try merging free blocks to reach the wanted size */
+	block_meta_t *merged_block = unite_blocks(block, size);
+	if (merged_block)
+		return get_address_by_block(merged_block);
+
+	/* Try to reuse free block */
+	block_meta_t *reused_block = reuse_block(size);
+	if (reused_block) {
+		block->size = true_size;
+		copy_contents(block, reused_block);
 		os_free(ptr);
-		return get_address_by_block(unused);
+		return get_address_by_block(reused_block);
 	}
 
-	/* Try merging with free block  next to block */
-	/* This is a fucking problem */
-	block_meta_t *ret = make_space(block, size);
-	if (ret)
-		return get_address_by_block(ret);
-
-	block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
-	DIE(!new_block, "os_realloc: failed reallocation\n");
-
-	add_block(new_block);
-	copy_contents(block, new_block);
+	/* Move to another zone */
+	block_meta_t *new_zone = alloc_new_block(size, MMAP_THRESHOLD);
+	DIE(!new_zone, "os_realloc: allocation failed\n");
+	add_block(new_zone);
+	copy_contents(block, new_zone);
 	os_free(ptr);
 
-	return get_address_by_block(new_block);	
+	return get_address_by_block(new_zone);
 }

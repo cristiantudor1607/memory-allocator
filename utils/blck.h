@@ -91,6 +91,8 @@ int free_mmaped_block(block_meta_t *block);
 
 /* Reallocation related functions */
 block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size);
+block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size);
+block_meta_t *unite_blocks(block_meta_t *block, size_t size);
 void *truncate_block(block_meta_t *block, size_t new_size);
 block_meta_t *make_space(block_meta_t *block, size_t size);
 
