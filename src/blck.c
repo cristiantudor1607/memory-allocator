@@ -59,7 +59,7 @@ block_meta_t *get_last_mmap()
         iter = iter->next;
     }
 
-    return iter;    
+    return iter;
 }
 
 block_meta_t *get_last_block()
@@ -83,7 +83,7 @@ void insert_mmaped_block(block_meta_t *block)
     }
 
     block_meta_t *last_mapped = get_last_mmap();
-    
+
     /* If last_mapped is NULL, then there is no mapped block in the list */
     if (!last_mapped) {
         /* Make it the head */
@@ -101,7 +101,6 @@ void insert_mmaped_block(block_meta_t *block)
     last_mapped->next = block;
     if (first_allocd)
         first_allocd->prev = block;
-    
 }
 
 void insert_heap_block(block_meta_t *block)
@@ -122,12 +121,11 @@ void insert_heap_block(block_meta_t *block)
 
 void add_block(block_meta_t *block)
 {
-	if (block->status == STATUS_ALLOC)
+	if (block->status == STATUS_ALLOC) {
         insert_heap_block(block);
-    else
+    } else {
         insert_mmaped_block(block);
-
-    list_size++;
+    }
 }
 
 void extract_block(block_meta_t *block)
@@ -225,7 +223,7 @@ block_meta_t *find_best_block(size_t size)
         /* If it finds a perfect block */
         if (ALIGN(iterator->size) == ALIGN(size))
             return iterator;
-        
+
         /* If it finds the first fitting zone */
         if (!return_block) {
             return_block = iterator;
@@ -240,7 +238,7 @@ block_meta_t *find_best_block(size_t size)
             continue;
         }
 
-        iterator = iterator->next;   
+        iterator = iterator->next;
     }
 
     return return_block;
@@ -264,7 +262,7 @@ void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type)
 }
 
 block_meta_t *alloc_new_block(size_t payload_size, size_t limit)
-{	
+{
     /* Calculated the raw memory size that will be used for the payload */
     size_t raw_size = BLOCK_ALIGN + ALIGN(payload_size);
 
@@ -283,7 +281,7 @@ block_meta_t *alloc_new_block(size_t payload_size, size_t limit)
     /* Make the header of the zone */
     block_meta_t *block = (block_meta_t *)p;
     block->size = payload_size;
-    
+
     if (raw_size <= limit)
         block->status = STATUS_ALLOC;
     else
@@ -325,7 +323,7 @@ block_meta_t *reuse_block(size_t size)
 {
     if (!head)
         return NULL;
-    
+
     size_t raw_size = BLOCK_ALIGN + ALIGN(size);
     if (raw_size > MMAP_THRESHOLD)
         return NULL;
@@ -340,7 +338,7 @@ block_meta_t *reuse_block(size_t size)
 
     /* If nothing was found, and the tail isn't free, there's nothing
     to do */
-    if (!block && tail->status != STATUS_FREE) 
+    if (!block && tail->status != STATUS_FREE)
         return NULL;
 
     /* If the tail is free, and it didin't find any block */
@@ -402,7 +400,7 @@ void merge_with_next(block_meta_t *block)
 
     /* Compute the size of the resulting block after merging */
     size_t new_size = ALIGN(block->size) + ALIGN(next->size) + BLOCK_ALIGN;
-    
+
     block_meta_t *new_next = next->next;
 
     /* If new_next exists, then it's prev pointer should point to the header of
@@ -412,7 +410,6 @@ void merge_with_next(block_meta_t *block)
 
     block->next = new_next;
     block->size = new_size;
-
 }
 
 void merge_with_prev(block_meta_t *block)
@@ -510,7 +507,7 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
         prealloc_done = DONE;
         return new_block;
     }
-    
+
     /* Search for unused blocks */
     if (raw_size <= MMAP_THRESHOLD) {
         block_meta_t *unused = reuse_block(size);
@@ -543,7 +540,7 @@ block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size)
         return NULL;
 
     copy_contents(block, new_block);
-    
+
     /* Add the new block to the Memory List and mark the old one as free */
     add_block(new_block);
 
@@ -555,7 +552,7 @@ block_meta_t *unite_blocks(block_meta_t *block, size_t size)
     while (block->next != NULL) {
         if (block->next->status != STATUS_FREE)
             break;
-        
+
         block->size = get_raw_size(block);
         merge_with_next(block);
 
@@ -582,7 +579,7 @@ block_meta_t *make_space(block_meta_t *block, size_t size)
     while (block->next != NULL) {
         if (block->next->status != STATUS_FREE)
             break;
-        
+
         /* Merge with next block */
         merge_with_next(block);
 
@@ -624,7 +621,7 @@ void print_block(block_meta_t *block)
         printf_("\n");
         return;
     }
-    
+
     void *p = get_address_by_block(block);
     printf_("BLOCK ADDRESS: %p\n", block);
     printf_("MEMORY ADDRESS: %p\n", p);
@@ -640,7 +637,7 @@ void print_block(block_meta_t *block)
 
     printf_("PREV: %p\n", block->prev);
     printf_("NEXT: %p\n", block->next);
-   
+
     printf_("\n");
 }
 
