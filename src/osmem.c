@@ -114,11 +114,18 @@ void *os_calloc(size_t nmemb, size_t size)
 
 void *os_realloc(void *ptr, size_t size)
 {
+	printf_("+++++++++++++++++++++++++++++++++\n");
+	print_list();
 	if (!ptr && !size)
 		return NULL;
 
-	if (!ptr)
-		return os_malloc(size);
+	if (!ptr) {
+		block_meta_t *unused = reuse_block(size);
+		if (unused)
+			return get_address_by_block(unused);
+		else
+			return os_malloc(size);
+	}
 
 	if (!size) {
 		os_free(ptr);
@@ -137,65 +144,58 @@ void *os_realloc(void *ptr, size_t size)
 		return get_address_by_block(new_block);
 	}
 
-	/* If the size is less or equal, we'll truncate the block, without creating
-	any additional block. We can bring back the old size by computing the
-	difference between the next block start address (header start address) and
-	the memory start address (pointer to the end of the current block header) */
-	if (size <= block->size) {
-		printf_("Truncate case\n");
-		block->size = size;
-		return ptr;
+	/* If the size is smaller than block->size, there is a possibility that
+	we have to split the block */
+	size_t true_size = get_raw_size(block);
+	if (ALIGN(size) < true_size) {
+		if (true_size - ALIGN(size) >= MIN_SPACE) {
+			block->size = true_size;
+			split_block(block, size);
+			return ptr;
+		}
 	}
 
-	/* Check if the last block was truncated. If true, try using that memory. 
-	If there isn't enough memory, expand the heap */
+	/* Check if it is the last block in Memory List; because there is a 
+	possibility that it was previously truncated, we have to get it's real,
+	allocated size */
 	if (!block->next) {
-		/* Get the end address */
-		void *end_addr = sbrk(0);
-
-		size_t diff = (size_t)(end_addr - ptr);
-		if (diff >= size) {
+		if (ALIGN(size) <= true_size) {
 			block->size = size;
 			return ptr;
 		}
-		
-		/* Expand the block */
-		block->size = diff;
-		expand_heap(ALIGN(size - diff));
-		return ptr;
-	}
 
-	/* Compute the difference between the address and the next block header */
-	size_t diff = (size_t)((void *)block->next - ptr);
-	if (diff >= size) {
+		/* Expand */
+		expand_heap(ALIGN(size) - true_size);
 		block->size = size;
 		return ptr;
-	} else {
-		block->size = diff;
-
-		/* Try merging */
-		block_meta_t *space = make_space(block, size);
-		if (space) {
-			return ptr;
-		}
-
-		/* Search for a free block */
-		block_meta_t *free_block = reuse_block(size);
-		if (free_block) {
-			return get_address_by_block(free_block);
-		}
-
-		block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
-		DIE(!new_block, "os_realloc: failed allocation\n");
-		
-		print_list();
-		add_block(new_block);
-		copy_contents(block, new_block);
-		mark_freed(block);
-		merge_free_blocks(block);
-		
-		print_list();
-		return get_address_by_block(new_block);
 	}
-	
+
+	/* Check if it is possible to truncate / use the memory that was previously
+	truncated, or expand the heap if it is the last block */
+	void *ret_addr = truncate_block(block, size);
+	if (ret_addr)
+		return ret_addr;
+
+	/* Search for free blocks to move the data */
+	block_meta_t *unused = reuse_block(size);
+	if (unused) {
+		copy_contents(block, unused);
+		os_free(ptr);
+		return get_address_by_block(unused);
+	}
+
+	/* Try merging with free block  next to block */
+	/* This is a fucking problem */
+	block_meta_t *ret = make_space(block, size);
+	if (ret)
+		return get_address_by_block(ret);
+
+	block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
+	DIE(!new_block, "os_realloc: failed reallocation\n");
+
+	add_block(new_block);
+	copy_contents(block, new_block);
+	os_free(ptr);
+
+	return get_address_by_block(new_block);	
 }

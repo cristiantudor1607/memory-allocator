@@ -170,9 +170,11 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
     /* Calculate the raw size of the block */
     size_t raw_block = BLOCK_ALIGN + ALIGN(unused_block->size);
 
-    /* Calculate the raw size of the new chunk */
+    /* Calculate the raw size that the chunk will have, as if there 
+    was a new block */
     size_t raw_chunk = BLOCK_ALIGN + ALIGN(payload_size);
 
+    /* The memory remaining to create a new block and data */
     size_t free_memory = raw_block - raw_chunk;
 
     /* Get a pointer to the resulting free block */
@@ -344,8 +346,8 @@ block_meta_t *reuse_block(size_t size)
     /* If the tail is free, and it didin't find any block */
     if (!block) {
         block_meta_t *ptr = tail;
-        void *new_zone = extend_heap(ALIGN(size) - ALIGN(tail->size));
-        DIE(!new_zone, "failed to extend the heap\n");
+        void *new_zone = expand_heap(ALIGN(size) - ALIGN(tail->size));
+        DIE(!new_zone, "failed to expand the heap\n");
         ptr->size = size;
         ptr->status = STATUS_ALLOC;
         return ptr;
@@ -371,6 +373,17 @@ void mark_freed(block_meta_t *block)
 {
     if (block->status != STATUS_ALLOC)
         DIE(1, "Invalid call of function\n");
+
+    /* Daca crapa sterge asta */
+    /* If the block was truncated in the past, restore it's size */
+    void *start_addr = get_address_by_block(block);
+    void *end_addr;
+    if (!block->next)
+        end_addr = sbrk(0);
+    else
+        end_addr = (void *)block->next;
+
+    block->size = (size_t)(end_addr - start_addr);
 
     block->status = STATUS_FREE;
 }
@@ -511,26 +524,10 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
 
 void *truncate_block(block_meta_t *block, size_t new_size)
 {
-    /* If it is the last block, we have to get the program break */
-    void *end_addr;
-    void *start_adrr = get_address_by_block(block);
-    
-    if (!block->next)
-        end_addr = sbrk(0);
-    else
-        end_addr = (void *)block->next;
-
-    /* If the block can hold new_size bytes */
-    size_t memory = end_addr - start_adrr;
-    if (memory < new_size) {
+    size_t true_size = get_raw_size(block);
+    if (true_size >= ALIGN(new_size)) {
         block->size = new_size;
-        return start_adrr;
-    }
-
-    /* If it can, expand the block, if it is the last block */
-    if (!block->next) {
-        expand_heap(new_size);
-        return start_adrr;
+        return get_address_by_block(block);
     }
 
     return NULL;
@@ -561,6 +558,18 @@ void copy_contents(block_meta_t *src_block, block_meta_t *dest_block)
     void *dest = get_address_by_block(dest_block);
     size_t n = src_block->size;
     memcpy(dest, src, n);
+}
+
+size_t get_raw_size(block_meta_t *block)
+{
+    void *start = get_address_by_block(block);
+    void *end;
+    if (!block->next)
+        end = sbrk(0);
+    else
+        end = (void *)block->next;
+
+    return (size_t)(end - start);
 }
 
 /* ----- DEBUGGING FUNCTIONS ----- */

@@ -66,7 +66,7 @@ block_meta_t *get_last_block();
 
 /* Allocation related functions */
 void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type);
-void *extend_heap(size_t size);
+void *expand_heap(size_t size);
 block_meta_t *alloc_new_block(size_t payload_size, size_t limit);
 block_meta_t *prealloc_heap();
 block_meta_t *reuse_block(size_t size);
@@ -91,6 +91,7 @@ int free_mmaped_block(block_meta_t *block);
 
 /* Reallocation related functions */
 block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size);
+void *truncate_block(block_meta_t *block, size_t new_size);
 block_meta_t *make_space(block_meta_t *block, size_t size);
 
 /* Helper functions */
@@ -110,3 +111,5 @@ size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size);
 void *memset_block(block_meta_t *block, int c);
 
 void copy_contents(block_meta_t *src_block, block_meta_t *dest_block);
+
+size_t get_raw_size(block_meta_t *block);
