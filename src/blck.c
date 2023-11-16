@@ -65,7 +65,7 @@ block_meta_t *get_last_mmap(void)
 	return iter;
 }
 
-block_meta_t *get_last_block()
+block_meta_t *get_last_block(void)
 {
 	if (!head)
 		return NULL;
@@ -137,15 +137,17 @@ void extract_block(block_meta_t *block)
 	block_meta_t *prev = block->prev;
 	block_meta_t *next = block->next;
 
-	/* If prev is NULL and next is NULL, then the block is the only block in 
-	Memory List: In this case,  we just reset the head */
+	/* If prev is NULL and next is NULL, then the block is the only block in
+	 * Memory List: In this case,  we just reset the head
+	 */
 	if (!prev && !next) {
 		head = NULL;
 		return;
 	}
 
 	/* If just prev is NULL, then the block is the head of the Memory List: In
-	 * this case, we make the next block the head */
+	 * this case, we make the next block the head
+	 */
 	if (!prev) {
 		head = head->next;
 		head->prev = NULL;
@@ -153,7 +155,8 @@ void extract_block(block_meta_t *block)
 	}
 
 	/* If next is NULL, then the block is the tail of the Memory List: In this
-	 * case, we have to break the connexion between prev and block */
+	 * case, we have to break the connexion between prev and block
+	 */
 	if (!next) {
 		prev->next = NULL;
 		return;
