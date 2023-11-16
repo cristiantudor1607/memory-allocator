@@ -2,8 +2,6 @@
 
 #include "blck.h"
 
-/* ----- MEMORY LIST RELATED FUNCTIONS ----- */
-
 void set_list_head(block_meta_t *block)
 {
 	head = block;
@@ -131,44 +129,6 @@ void add_block(block_meta_t *block)
 		insert_mmaped_block(block);
 }
 
-void extract_block(block_meta_t *block)
-{
-	block_meta_t *prev = block->prev;
-	block_meta_t *next = block->next;
-
-	/* If prev is NULL and next is NULL, then the block is the only block in
-	 * Memory List: In this case,  we just reset the head
-	 */
-	if (!prev && !next) {
-		head = NULL;
-		return;
-	}
-
-	/* If just prev is NULL, then the block is the head of the Memory List: In
-	 * this case, we make the next block the head
-	 */
-	if (!prev) {
-		head = head->next;
-		head->prev = NULL;
-		return;
-	}
-
-	/* If next is NULL, then the block is the tail of the Memory List: In this
-	 * case, we have to break the connexion between prev and block
-	 */
-	if (!next) {
-		prev->next = NULL;
-		return;
-	}
-
-	next->prev = prev;
-	prev->next = next;
-
-	/* For more safety break the connections of the block */
-	block->prev = NULL;
-	block->next = NULL;
-}
-
 block_meta_t *split_block(block_meta_t *unused_block, size_t payload_size)
 {
 	/* Calculate the raw size of the block */
@@ -205,6 +165,44 @@ block_meta_t *split_block(block_meta_t *unused_block, size_t payload_size)
 	unused_block->next = free_block;
 
 	return free_block;
+}
+
+void extract_block(block_meta_t *block)
+{
+	block_meta_t *prev = block->prev;
+	block_meta_t *next = block->next;
+
+	/* If prev is NULL and next is NULL, then the block is the only block in
+	 * Memory List: In this case,  we just reset the head
+	 */
+	if (!prev && !next) {
+		head = NULL;
+		return;
+	}
+
+	/* If just prev is NULL, then the block is the head of the Memory List: In
+	 * this case, we make the next block the head
+	 */
+	if (!prev) {
+		head = head->next;
+		head->prev = NULL;
+		return;
+	}
+
+	/* If next is NULL, then the block is the tail of the Memory List: In this
+	 * case, we have to break the connexion between prev and block
+	 */
+	if (!next) {
+		prev->next = NULL;
+		return;
+	}
+
+	next->prev = prev;
+	prev->next = next;
+
+	/* For more safety break the connections of the block */
+	block->prev = NULL;
+	block->next = NULL;
 }
 
 block_meta_t *find_best_block(size_t size)
@@ -248,8 +246,6 @@ block_meta_t *find_best_block(size_t size)
 
 	return return_block;
 }
-
-/* ----- ALLOCATION RELATED FUNCTIONS ----- */
 
 void *alloc_raw_memory(size_t raw_size, alloc_type_t syscall_type)
 {
@@ -328,6 +324,7 @@ void *expand_heap(size_t size)
 
 block_meta_t *reuse_block(size_t size)
 {
+	/* If list is empty */
 	if (!head)
 		return NULL;
 
@@ -376,8 +373,6 @@ block_meta_t *reuse_block(size_t size)
 	split_block(block, size);
 	return block;
 }
-
-/* ----- DEALLOCATION RELATED FUNCTIONS ----- */
 
 void mark_freed(block_meta_t *block)
 {
