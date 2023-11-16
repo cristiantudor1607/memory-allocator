@@ -17,6 +17,7 @@ block_meta_t *get_last_heap(void)
 	while (iter->next)
 		iter = iter->next;
 
+	/* If last block is mapped, then there are no heap blocks */
 	if (iter->status == STATUS_MAPPED)
 		return NULL;
 
@@ -284,6 +285,7 @@ block_meta_t *alloc_new_block(size_t payload_size, size_t limit)
 
 	block->size = payload_size;
 
+	/* Set block status */
 	if (raw_size <= limit)
 		block->status = STATUS_ALLOC;
 	else
@@ -339,7 +341,7 @@ block_meta_t *reuse_block(size_t size)
 	if (!tail)
 		return NULL;
 
-	/* Find a fitting block*/
+	/* Find a fitting block */
 	block_meta_t *block = find_best_block(size);
 
 	/* If nothing was found, and the tail isn't free, there's nothing
@@ -360,11 +362,13 @@ block_meta_t *reuse_block(size_t size)
 		return ptr;
 	}
 
+	/* If it found a perfect sized block */
 	if (block->size == size) {
 		block->status = STATUS_ALLOC;
 		return block;
 	}
 
+	/* If the block can't be splitted, just set it's status */
 	if (get_raw_reusable_memory(block, size) < MIN_SPACE) {
 		block->status = STATUS_ALLOC;
 		return block;
@@ -383,12 +387,7 @@ void mark_freed(block_meta_t *block)
 	void *start_addr = get_address_by_block(block);
 	void *end_addr;
 
-	if (!block->next)
-		end_addr = sbrk(0);
-	else
-		end_addr = (void *)block->next;
-
-	block->size = (size_t)(end_addr - start_addr);
+	block->size = get_raw_size(block);
 
 	block->status = STATUS_FREE;
 }
@@ -527,6 +526,7 @@ block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size)
 block_meta_t *unite_blocks(block_meta_t *block, size_t size)
 {
 	while (block->next != NULL) {
+		/* It should break when it reaches first allocated block */
 		if (block->next->status != STATUS_FREE)
 			break;
 
