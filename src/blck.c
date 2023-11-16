@@ -9,12 +9,13 @@ void set_list_head(block_meta_t *block)
 	head = block;
 }
 
-block_meta_t *get_last_heap()
+block_meta_t *get_last_heap(void)
 {
 	if (!head)
 		return NULL;
 
 	block_meta_t *iter = head;
+
 	while (iter->next)
 		iter = iter->next;
 
@@ -24,12 +25,13 @@ block_meta_t *get_last_heap()
 	return iter;
 }
 
-block_meta_t *get_heap_start()
+block_meta_t *get_heap_start(void)
 {
 	if (!head)
 		return NULL;
 
 	block_meta_t *iter = head;
+
 	while (iter) {
 		if (iter->status == STATUS_ALLOC)
 			return iter;
@@ -40,7 +42,7 @@ block_meta_t *get_heap_start()
 	return NULL;
 }
 
-block_meta_t *get_last_mmap()
+block_meta_t *get_last_mmap(void)
 {
 	/* If Memory List is empty */
 	if (!head)
@@ -52,6 +54,7 @@ block_meta_t *get_last_mmap()
 
 	/* Find the last maped block */
 	block_meta_t *iter = head;
+
 	while (iter->next != NULL) {
 		if (iter->next->status == STATUS_ALLOC)
 			break;
@@ -68,6 +71,7 @@ block_meta_t *get_last_block()
 		return NULL;
 
 	block_meta_t *iter = head;
+
 	while (iter->next)
 		iter = iter->next;
 
