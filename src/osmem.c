@@ -164,7 +164,7 @@ void *os_realloc(void *ptr, size_t size)
 
 
 	/* If the size is smaller than all the memory allocated in block's memory,
-	 * there are two possibilities: is is considerable smaller, it should be
+	 * there are two possibilities: is considerable smaller, it should be
 	 * splitted, else, it should be truncated
 	 */
 	size_t true_size = get_raw_size(block);
