@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include "printf.h"
 #include "block_meta.h"
-#include "blck.h"
+#include "../src/blck.h"
 
 void *os_malloc(size_t size);
 void os_free(void *ptr);
