@@ -4,7 +4,6 @@
 
 /* Global head of the Memory List */
 block_meta_t *head = NULL;
-size_t list_size = 0;
 
 /* Global heap preallocation */
 int prealloc_done = NOT_DONE;

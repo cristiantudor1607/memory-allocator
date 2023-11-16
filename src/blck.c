@@ -145,7 +145,7 @@ void extract_block(block_meta_t *block)
 	}
 
 	/* If just prev is NULL, then the block is the head of the Memory List: In
-	this case, we make the next block the head */
+	 * this case, we make the next block the head */
 	if (!prev) {
 		head = head->next;
 		head->prev = NULL;
@@ -153,7 +153,7 @@ void extract_block(block_meta_t *block)
 	}
 
 	/* If next is NULL, then the block is the tail of the Memory List: In this
-	case, we have to break the connexion between prev and block */
+	 * case, we have to break the connexion between prev and block */
 	if (!next) {
 		prev->next = NULL;
 		return;
@@ -173,7 +173,7 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
 	size_t raw_block = BLOCK_ALIGN + ALIGN(unused_block->size);
 
 	/* Calculate the raw size that the chunk will have, as if there 
-	was a new block */
+	 * was a new block */
 	size_t raw_chunk = BLOCK_ALIGN + ALIGN(payload_size);
 
 	/* The memory remaining to create a new block and data */
@@ -200,8 +200,6 @@ block_meta_t* split_block(block_meta_t *unused_block, size_t payload_size)
 		unused_block->next->prev = free_block;
 
 	unused_block->next = free_block;
-
-	list_size++;
 
 	return free_block;
 }
@@ -341,7 +339,7 @@ block_meta_t *reuse_block(size_t size)
 	block_meta_t *block = find_best_block(size);
 
 	/* If nothing was found, and the tail isn't free, there's nothing
-	to do */
+	 * to do */
 	if (!block && tail->status != STATUS_FREE)
 		return NULL;
 
@@ -376,7 +374,6 @@ void mark_freed(block_meta_t *block)
 	if (block->status != STATUS_ALLOC)
 		DIE(1, "Invalid call of function\n");
 
-	/* Daca crapa sterge asta */
 	/* If the block was truncated in the past, restore it's size */
 	void *start_addr = get_address_by_block(block);
 	void *end_addr;
@@ -408,7 +405,7 @@ void merge_with_next(block_meta_t *block)
 	block_meta_t *new_next = next->next;
 
 	/* If new_next exists, then it's prev pointer should point to the header of
-	the block, because it will become the header of the big block */
+	 * the block, because it will become the header of the big block */
 	if (new_next)
 		new_next->prev = block;
 
@@ -489,7 +486,7 @@ void *memset_block(block_meta_t *block, int c)
 block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
 {
 	/* As a measure of safety, return NULL if the function isn't called with
-	a block that wasn't mapped */
+	 * a block that wasn't mapped */
 	if (block->status != STATUS_MAPPED)
 		return NULL;
 
@@ -593,7 +590,7 @@ block_meta_t *make_space(block_meta_t *block, size_t size)
 	}
 
 	/* If it reaches this point, then there is no space, not even after
-	merging all blocks */
+	 * merging all blocks */
 	return NULL;
 }
 
@@ -615,47 +612,4 @@ size_t get_raw_size(block_meta_t *block)
 		end = (void *)block->next;
 
 	return (size_t)(end - start);
-}
-
-/* ----- DEBUGGING FUNCTIONS ----- */
-void print_block(block_meta_t *block)
-{
-	if (block == NULL) {
-		printf_("NULL BLOCK\n");
-		printf_("\n");
-		return;
-	}
-
-	void *p = get_address_by_block(block);
-	printf_("BLOCK ADDRESS: %p\n", block);
-	printf_("MEMORY ADDRESS: %p\n", p);
-	printf_("BLOCK SIZE: %ld / %ld\n", block->size, BLOCK_ALIGN + ALIGN(block->size));
-	printf_("BLOCK STATUS: ");
-	if (block->status == STATUS_ALLOC) {
-		printf_("STATUS_ALLOC\n");
-	} else if (block->status == STATUS_MAPPED) {
-		printf_("STATUS_MAPPED\n");
-	} else {
-		printf_("STATUS_FREE\n");
-	}
-
-	printf_("PREV: %p\n", block->prev);
-	printf_("NEXT: %p\n", block->next);
-
-	printf_("\n");
-}
-
-void print_list()
-{
-	printf_("<<<< Memory List <%ld> >>>>\n", list_size);
-	block_meta_t *item = head;
-	if (item == NULL) {
-		printf_("Memory List is Empty\n");
-		return;
-	}
-
-	while (item != NULL) {
-		print_block(item);
-		item = item->next;
-	}
 }

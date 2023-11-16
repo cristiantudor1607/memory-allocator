@@ -13,11 +13,6 @@
 
 extern block_meta_t *head;
 extern int prealloc_done;
-extern size_t list_size;
-
-/* Debugging functions */
-void print_block(block_meta_t *block);
-void print_list();
 
 /* Memory List related functions */
 void set_list_head(block_meta_t *block);
