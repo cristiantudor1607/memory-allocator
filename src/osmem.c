@@ -23,11 +23,10 @@ void *os_malloc(size_t size)
 		DIE(!new_block, "malloc: failed heap preallocation\n");
 
 		add_block(new_block);
-		if ((raw_size < MMAP_THRESHOLD) && (MMAP_THRESHOLD - raw_size >= MIN_SPACE)) {
+		if ((raw_size < MMAP_THRESHOLD) && (MMAP_THRESHOLD - raw_size >= MIN_SPACE))
 			split_block(new_block, size);
-		} else {
+		else
 			new_block->status = STATUS_ALLOC;
-		}
 
 		/* Mark prealloc as done */
 		prealloc_done = DONE;
@@ -36,6 +35,7 @@ void *os_malloc(size_t size)
 	}
 
 	block_meta_t *free_block = reuse_block(size);
+
 	if (free_block)
 		return get_address_by_block(free_block);
 
@@ -43,7 +43,6 @@ void *os_malloc(size_t size)
 	DIE(!new_block, "malloc: failed allocation\n");
 
 	add_block(new_block);
-
 
 	return get_address_by_block(new_block);
 }
@@ -60,6 +59,7 @@ void os_free(void *ptr)
 	if (block->status == STATUS_MAPPED) {
 		extract_block(block);
 		int ret = free_mmaped_block(block);
+
 		DIE(ret, "free: munmap failure\n");
 		return;
 	}
@@ -77,19 +77,18 @@ void *os_calloc(size_t nmemb, size_t size)
 		return NULL;
 
 	size_t raw_size = BLOCK_ALIGN + ALIGN(nmemb * size);
-
 	block_meta_t *new_block;
+
 	if (raw_size <= PAGE_SIZE && prealloc_done == NOT_DONE) {
 		new_block = prealloc_heap();
 		memset_block(new_block, 0);
 		DIE(!new_block, "calloc: failed heap preallocation\n");
 
 		add_block(new_block);
-		if ((raw_size < PAGE_SIZE) && (PAGE_SIZE - raw_size >= MIN_SPACE)) {
+		if ((raw_size < PAGE_SIZE) && (PAGE_SIZE - raw_size >= MIN_SPACE))
 			split_block(new_block, nmemb * size);
-		} else {
+		else
 			new_block->status = STATUS_ALLOC;
-		}
 
 		/* Mark prealloc as done */
 		prealloc_done = DONE;
@@ -108,6 +107,7 @@ void *os_calloc(size_t nmemb, size_t size)
 	}
 
 	block_meta_t *free_block = reuse_block(nmemb * size);
+
 	if (free_block)
 		return memset_block(free_block, 0);
 
@@ -127,6 +127,7 @@ void *os_realloc(void *ptr, size_t size)
 
 	if (!ptr) {
 		block_meta_t *unused = reuse_block(size);
+
 		if (unused)
 			return get_address_by_block(unused);
 		else
