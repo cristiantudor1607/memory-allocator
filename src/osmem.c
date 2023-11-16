@@ -2,6 +2,10 @@
 
 #include "osmem.h"
 
+/* Because of vmchecker I had to include these 2 here */
+#include "block_meta.h"
+#include "blck.h"
+
 /* Global head of the Memory List */
 block_meta_t *head;
 

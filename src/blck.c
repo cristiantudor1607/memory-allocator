@@ -384,9 +384,6 @@ void mark_freed(block_meta_t *block)
 		DIE(1, "Invalid call of function\n");
 
 	/* If the block was truncated in the past, restore it's size */
-	void *start_addr = get_address_by_block(block);
-	void *end_addr;
-
 	block->size = get_raw_size(block);
 
 	block->status = STATUS_FREE;
