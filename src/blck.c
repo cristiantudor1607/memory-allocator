@@ -174,7 +174,7 @@ block_meta_t *split_block(block_meta_t *unused_block, size_t payload_size)
 	/* Calculate the raw size of the block */
 	size_t raw_block = BLOCK_ALIGN + ALIGN(unused_block->size);
 
-	/* Calculate the raw size that the chunk will have, as if there 
+	/* Calculate the raw size that the chunk will have, as if there
 	 * was a new block
 	 */
 	size_t raw_chunk = BLOCK_ALIGN + ALIGN(payload_size);
@@ -356,6 +356,7 @@ block_meta_t *reuse_block(size_t size)
 		block_meta_t *ptr = tail;
 
 		void *new_zone = expand_heap(ALIGN(size) - ALIGN(tail->size));
+
 		DIE(!new_zone, "failed to expand the heap\n");
 		ptr->size = size;
 		ptr->status = STATUS_ALLOC;
@@ -386,6 +387,7 @@ void mark_freed(block_meta_t *block)
 	/* If the block was truncated in the past, restore it's size */
 	void *start_addr = get_address_by_block(block);
 	void *end_addr;
+
 	if (!block->next)
 		end_addr = sbrk(0);
 	else
@@ -456,6 +458,7 @@ void merge_free_blocks(block_meta_t *block)
 int free_mmaped_block(block_meta_t *block)
 {
 	size_t length = BLOCK_ALIGN + ALIGN(block->size);
+
 	return munmap((void *)block, length);
 }
 
@@ -502,19 +505,18 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
 		return NULL;
 
 	size_t raw_size = BLOCK_ALIGN + ALIGN(size);
-
 	block_meta_t *new_block;
+
 	if (raw_size <= MMAP_THRESHOLD && prealloc_done == NOT_DONE) {
 		new_block = prealloc_heap();
 		if (!new_block)
 			return NULL;
 
 		add_block(new_block);
-		if (raw_size < MMAP_THRESHOLD && MMAP_THRESHOLD - raw_size >= MIN_SPACE) {
+		if (raw_size < MMAP_THRESHOLD && MMAP_THRESHOLD - raw_size >= MIN_SPACE)
 			split_block(new_block, size);
-		} else {
+		else
 			new_block->status = STATUS_ALLOC;
-		}
 
 		prealloc_done = DONE;
 		return new_block;
@@ -523,6 +525,7 @@ block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
 	/* Search for unused blocks */
 	if (raw_size <= MMAP_THRESHOLD) {
 		block_meta_t *unused = reuse_block(size);
+
 		if (unused)
 			return unused;
 	}
@@ -548,6 +551,7 @@ block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size)
 
 	/* Get a new block and copy the contents */
 	block_meta_t *new_block = alloc_new_block(size, MMAP_THRESHOLD);
+
 	if (!new_block)
 		return NULL;
 
@@ -578,6 +582,7 @@ block_meta_t *unite_blocks(block_meta_t *block, size_t size)
 void *truncate_block(block_meta_t *block, size_t new_size)
 {
 	size_t true_size = get_raw_size(block);
+
 	if (true_size >= ALIGN(new_size)) {
 		block->size = new_size;
 		return get_address_by_block(block);
@@ -611,6 +616,7 @@ void copy_contents(block_meta_t *src_block, block_meta_t *dest_block)
 	void *src = get_address_by_block(src_block);
 	void *dest = get_address_by_block(dest_block);
 	size_t n = src_block->size;
+
 	memcpy(dest, src, n);
 }
 
@@ -618,6 +624,7 @@ size_t get_raw_size(block_meta_t *block)
 {
 	void *start = get_address_by_block(block);
 	void *end;
+
 	if (!block->next)
 		end = sbrk(0);
 	else
