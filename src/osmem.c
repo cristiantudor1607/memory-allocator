@@ -154,7 +154,7 @@ void *os_realloc(void *ptr, size_t size)
 		return NULL;
 
 	/* First, for mapped blocks, they should be reallocated, no matter the
- 	 * new size, and the old block should be freed
+	 * new size, and the old block should be freed
 	 */
 	if (block->status == STATUS_MAPPED) {
 		block_meta_t *new_block = realloc_mapped_block(block, size);
@@ -165,7 +165,8 @@ void *os_realloc(void *ptr, size_t size)
 	}
 
 	/* If the heap block new size is much bigger, and it should be reallocated
-	 * using mmap */
+	 * using mmap
+	 */
 	if (ALIGN(size) + BLOCK_ALIGN > MMAP_THRESHOLD) {
 		block_meta_t *new_block = move_to_mmap_space(block, size);
 
