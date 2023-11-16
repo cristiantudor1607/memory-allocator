@@ -140,12 +140,14 @@ void *os_realloc(void *ptr, size_t size)
 	}
 
 	block_meta_t *block = get_block_by_address(ptr);
+
 	if (block->status == STATUS_FREE)
 		return NULL;
 
 	/* First, for mapped blocks there is a single case */
 	if (block->status == STATUS_MAPPED) {
 		block_meta_t *new_block = realloc_mapped_block(block, size);
+
 		DIE(!new_block, "realloc: failed allocation\n");
 		os_free(ptr);
 		return get_address_by_block(new_block);
@@ -154,6 +156,7 @@ void *os_realloc(void *ptr, size_t size)
 	/* If the heap block should be rellocated with mmap */
 	if (ALIGN(size) + BLOCK_ALIGN > MMAP_THRESHOLD) {
 		block_meta_t *new_block = move_to_mmap_space(block, size);
+
 		DIE(!new_block, "realloc: failed allocation\n");
 		os_free(ptr);
 		return get_address_by_block(new_block);
@@ -162,8 +165,10 @@ void *os_realloc(void *ptr, size_t size)
 
 	/* If the size is smaller than all the memory allocated in block's memory,
 	 * there are two possibilities: is is considerable smaller, it should be
-	 * splitted, else, it should be truncated */
+	 * splitted, else, it should be truncated
+	 */
 	size_t true_size = get_raw_size(block);
+
 	if (ALIGN(size) <= true_size) {
 		/* Split case */
 		if (true_size - ALIGN(size) >= MIN_SPACE) {
@@ -185,14 +190,15 @@ void *os_realloc(void *ptr, size_t size)
 		return ptr;
 	}
 
-
 	/* Try merging free blocks to reach the wanted size */
 	block_meta_t *merged_block = unite_blocks(block, size);
+
 	if (merged_block)
 		return get_address_by_block(merged_block);
 
 	/* Try to reuse free block */
 	block_meta_t *reused_block = reuse_block(size);
+
 	if (reused_block) {
 		block->size = true_size;
 		copy_contents(block, reused_block);
@@ -202,6 +208,7 @@ void *os_realloc(void *ptr, size_t size)
 
 	/* Move to another zone */
 	block_meta_t *new_zone = alloc_new_block(size, MMAP_THRESHOLD);
+
 	DIE(!new_zone, "realloc: allocation failed\n");
 	add_block(new_zone);
 	copy_contents(block, new_zone);
