@@ -18,10 +18,14 @@ void *os_malloc(size_t size)
 
 	block_meta_t *new_block;
 
+	/* Prealloc the heap if neccessary */
 	if (raw_size <= MMAP_THRESHOLD && prealloc_done == NOT_DONE) {
 		new_block = prealloc_heap();
 		DIE(!new_block, "malloc: failed heap preallocation\n");
 
+		/* Add block and split the preallocated area if there is enough size
+		 * remaining
+		 */
 		add_block(new_block);
 		if ((raw_size < MMAP_THRESHOLD) && (MMAP_THRESHOLD - raw_size >= MIN_SPACE))
 			split_block(new_block, size);
@@ -34,11 +38,13 @@ void *os_malloc(size_t size)
 		return get_address_by_block(new_block);
 	}
 
+	/* Try reusing blocks */
 	block_meta_t *free_block = reuse_block(size);
 
 	if (free_block)
 		return get_address_by_block(free_block);
 
+	/* Alloc a new block */
 	new_block = alloc_new_block(size, MMAP_THRESHOLD);
 	DIE(!new_block, "malloc: failed allocation\n");
 
@@ -73,12 +79,14 @@ void os_free(void *ptr)
 
 void *os_calloc(size_t nmemb, size_t size)
 {
+	/* If size is 0 */
 	if (!size || !nmemb)
 		return NULL;
 
 	size_t raw_size = BLOCK_ALIGN + ALIGN(nmemb * size);
 	block_meta_t *new_block;
 
+	/* Preallocate the heap if neccessary */
 	if (raw_size <= PAGE_SIZE && prealloc_done == NOT_DONE) {
 		new_block = prealloc_heap();
 		memset_block(new_block, 0);
@@ -125,6 +133,7 @@ void *os_realloc(void *ptr, size_t size)
 	if (!ptr && !size)
 		return NULL;
 
+	/* When realloc is called as malloc, search for unused blocks first */
 	if (!ptr) {
 		block_meta_t *unused = reuse_block(size);
 
@@ -144,7 +153,9 @@ void *os_realloc(void *ptr, size_t size)
 	if (block->status == STATUS_FREE)
 		return NULL;
 
-	/* First, for mapped blocks there is a single case */
+	/* First, for mapped blocks, they should be reallocated, no matter the
+ 	 * new size, and the old block should be freed
+	 */
 	if (block->status == STATUS_MAPPED) {
 		block_meta_t *new_block = realloc_mapped_block(block, size);
 
@@ -153,7 +164,8 @@ void *os_realloc(void *ptr, size_t size)
 		return get_address_by_block(new_block);
 	}
 
-	/* If the heap block should be rellocated with mmap */
+	/* If the heap block new size is much bigger, and it should be reallocated
+	 * using mmap */
 	if (ALIGN(size) + BLOCK_ALIGN > MMAP_THRESHOLD) {
 		block_meta_t *new_block = move_to_mmap_space(block, size);
 
@@ -162,10 +174,9 @@ void *os_realloc(void *ptr, size_t size)
 		return get_address_by_block(new_block);
 	}
 
-
 	/* If the size is smaller than all the memory allocated in block's memory,
-	 * there are two possibilities: is considerable smaller, it should be
-	 * splitted, else, it should be truncated
+	 * there are two possibilities: is considerable smaller, and it should be
+	 * splitted, or it should be truncated
 	 */
 	size_t true_size = get_raw_size(block);
 
@@ -181,7 +192,6 @@ void *os_realloc(void *ptr, size_t size)
 		block->size = size;
 		return ptr;
 	}
-
 
 	/* Check if memory can be expanded by expanding the heap */
 	if (!block->next) {
