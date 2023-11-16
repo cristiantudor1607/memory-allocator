@@ -457,40 +457,6 @@ int free_mmaped_block(block_meta_t *block)
 	return munmap((void *)block, length);
 }
 
-/* ----- OTHER FUNCTIONS ----- */
-
-void *get_address_by_block(block_meta_t *block)
-{
-	return (void *)((char *)block + BLOCK_ALIGN);
-}
-
-block_meta_t *get_block_by_address(void *addr)
-{
-	return (block_meta_t *)((char *)addr - BLOCK_ALIGN);
-}
-
-size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size)
-{
-	/* Calculate the raw size for the new memory*/
-	size_t raw_size = BLOCK_ALIGN + ALIGN(new_size);
-
-	/* Calculate the raw size of the block */
-	size_t capacity = BLOCK_ALIGN + ALIGN(block->size);
-
-	return capacity - raw_size;
-}
-
-void *memset_block(block_meta_t *block, int c)
-{
-	void *p = get_address_by_block(block);
-	size_t len = ALIGN(block->size);
-
-	return memset(p, c, len);
-}
-
-
-/* ----- REALLOCATION RELATED FUNCTIONS ----- */
-
 block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size)
 {
 	/* As a measure of safety, return NULL if the function isn't called with
@@ -574,36 +540,47 @@ block_meta_t *unite_blocks(block_meta_t *block, size_t size)
 	return NULL;
 }
 
-void *truncate_block(block_meta_t *block, size_t new_size)
+void *get_address_by_block(block_meta_t *block)
 {
-	size_t true_size = get_raw_size(block);
-
-	if (true_size >= ALIGN(new_size)) {
-		block->size = new_size;
-		return get_address_by_block(block);
-	}
-
-	return NULL;
+	return (void *)((char *)block + BLOCK_ALIGN);
 }
 
-block_meta_t *make_space(block_meta_t *block, size_t size)
+block_meta_t *get_block_by_address(void *addr)
 {
-	while (block->next != NULL) {
-		if (block->next->status != STATUS_FREE)
-			break;
+	return (block_meta_t *)((char *)addr - BLOCK_ALIGN);
+}
 
-		/* Merge with next block */
-		merge_with_next(block);
+size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size)
+{
+	/* Calculate the raw size for the new memory*/
+	size_t raw_size = BLOCK_ALIGN + ALIGN(new_size);
 
-		/* If it matches, stop here */
-		if (ALIGN(block->size) >= ALIGN(size))
-			return block;
-	}
+	/* Calculate the raw size of the block */
+	size_t capacity = BLOCK_ALIGN + ALIGN(block->size);
 
-	/* If it reaches this point, then there is no space, not even after
-	 * merging all blocks
-	 */
-	return NULL;
+	return capacity - raw_size;
+}
+
+size_t get_raw_size(block_meta_t *block)
+{
+	void *start = get_address_by_block(block);
+	void *end;
+
+	/* Get the end address of current useful memory chunk */
+	if (!block->next)
+		end = sbrk(0);
+	else
+		end = (void *)block->next;
+
+	return (size_t)(end - start);
+}
+
+void *memset_block(block_meta_t *block, int c)
+{
+	void *p = get_address_by_block(block);
+	size_t len = ALIGN(block->size);
+
+	return memset(p, c, len);
 }
 
 void copy_contents(block_meta_t *src_block, block_meta_t *dest_block)
@@ -615,15 +592,3 @@ void copy_contents(block_meta_t *src_block, block_meta_t *dest_block)
 	memcpy(dest, src, n);
 }
 
-size_t get_raw_size(block_meta_t *block)
-{
-	void *start = get_address_by_block(block);
-	void *end;
-
-	if (!block->next)
-		end = sbrk(0);
-	else
-		end = (void *)block->next;
-
-	return (size_t)(end - start);
-}

@@ -180,33 +180,84 @@ block_meta_t *reuse_block(size_t size);
 void mark_freed(block_meta_t *block);
 
 /**
- * @brief Merge a block with it's next neighbour, if is possible
+ * @brief Merge a block with it's next neighbour, if possible
  * 
  * @param block The "central" block that should be merged with it's next
  */
 void merge_with_next(block_meta_t *block);
-void merge_with_prev(block_meta_t *block);
-void merge_free_blocks(block_meta_t *block);
 
+/**
+ * @brief Merge a block with it's prev neighbour, if possible
+ * 
+ * @param block The "central" block that should be merged with it's prev
+ */
+void merge_with_prev(block_meta_t *block);
+
+/**
+ * @brief Merge a block with it's neighbours, if possible. It's a wrraper over
+ * merge_with_next and merge_with_prev
+ * 
+ * @param block The "central" block that should be merged with it's neighbours
+ */
+void merge_free_blocks(block_meta_t *block);
 
 /**
  * @brief Eliberates a block that contains memory allocated by mmap syscall.
  * It's a wrraper of munmap syscall, specialized on metablocks.
  * 
  * @param block The block that should be freed.
- * @return int: Return value of the munmap syscall.
+ * @return int Return value of the munmap syscall.
  */
 int free_mmaped_block(block_meta_t *block);
 
 /* Reallocation related functions */
-block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size);
-block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size);
-block_meta_t *unite_blocks(block_meta_t *block, size_t size);
-void *truncate_block(block_meta_t *block, size_t new_size);
-block_meta_t *make_space(block_meta_t *block, size_t size);
 
-/* Helper functions */
+/**
+ * @brief Reallocates a block that was previously mapped
+ * 
+ * @param block The block that should be reallocated
+ * @param size The new size to be reallocated
+ * @return block_meta_t* New block, or NULL in case of allocation failures
+ */
+block_meta_t *realloc_mapped_block(block_meta_t *block, size_t size);
+
+/**
+ * @brief Realloc a block allocated on heap to the "mmap space", using,
+ * obviously, the mmap syscall
+ * 
+ * @param block Old block that should be reallocated
+ * @param size The new size (bigger than MMAP_THRESHOLD)
+ * @return block_meta_t* New block or NULL in case of allocation failures
+ */
+block_meta_t *move_to_mmap_space(block_meta_t *block, size_t size);
+
+/**
+ * @brief Expand a block with it's free neighbours until it reaches a size
+ * bigger or equal to the given size
+ * 
+ * @param block The block that should be expanded
+ * @param size The new size for the block
+ * @return block_meta_t* The block given as parameter, if the operation was
+ * successfully expanded, or NULL in case it couldn't expand
+ */
+block_meta_t *unite_blocks(block_meta_t *block, size_t size);
+
+/**
+ * @brief Get a pointer to the memory that can be used from the block sent
+ * as parameter
+ * 
+ * @param block The block that you want to get the memory address
+ * @return void* Utilisable memory address
+ */
 void *get_address_by_block(block_meta_t *block);
+
+/**
+ * @brief Get a pointer to the block by sending as parameter it's related
+ * memory zone pointer
+ * 
+ * @param addr Pointer to the memory zone
+ * @return block_meta_t* The block that corresponds to the address
+ */
 block_meta_t *get_block_by_address(void *addr);
 
 /**
@@ -219,8 +270,30 @@ block_meta_t *get_block_by_address(void *addr);
  */
 size_t get_raw_reusable_memory(block_meta_t *block, size_t new_size);
 
+/**
+ * @brief Get the raw size of a block. After a truncation, the size placed in
+ * block structure isn't the correct size, so it calculates the difference
+ * between next block address, or program break, and the memory zone pointer,
+ * because they're contiguous
+ * 
+ * @param block The block that you want to calculate it's real size
+ * @return size_t Block size in bytes
+ */
+size_t get_raw_size(block_meta_t *block);
+
+/**
+ * @brief Wrapper over memset
+ * 
+ * @param block Block that you want to memset
+ * @param c The value you want to set
+ * @return void* Pointer to block's memory zone
+ */
 void *memset_block(block_meta_t *block, int c);
 
+/**
+ * @brief Wrapper over memcpy. Copies the bytes from one block to another
+ * 
+ * @param src_block The source block
+ * @param dest_block The destination block
+ */
 void copy_contents(block_meta_t *src_block, block_meta_t *dest_block);
-
-size_t get_raw_size(block_meta_t *block);
